@@ -1,0 +1,138 @@
+package com.example.crud.domain.product;
+package com.example.crud.domain.product;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+package com.example.crud.controllers;
+
+import com.example.crud.domain.product.DistributionCenter;
+import com.example.crud.domain.product.Product;
+import com.example.crud.domain.product.ProductRepository;
+import com.example.crud.domain.product.RequestProduct;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+public interface ProductRepository extends JpaRepository<Product, String> {
+    List<Product> findAllByActiveTrue();
+    
+    List<Product> findAllByDistributionCenterAndActiveTrue(DistributionCenter distributionCenter);
+}
+
+public enum distribution_Center{
+    RJ,
+    MG,
+    SP
+}
+
+public record RequestProduct(
+    String id,
+    @NotBlank String name,
+    @NotNull Integer price_in_cents,
+    @NotBlank String category,
+    @NotNull distribution_Center Distribution_Center;
+){
+
+}
+public class product {
+    @Id @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+    private String name;
+    private Integer price_in_cents;
+    private boolean active;
+    private String category;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "distribution_center")
+
+    private distribution_Center Distribution_Center;
+
+    public product(RequestProduct requestProduct){
+        this.name = requestProduct.name();
+        this.price_in_cents = requestProduct.price_in_cents();
+        this.active = true;
+        this.category = requestProduct.category();
+        this.distributionCenter = requestProduct.distribution_center();
+    }
+
+}
+package com.example.crud.domain.product;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface ProductRepository extends JpaRepository<Product, String> {
+    List<Product> findAllByActiveTrue();
+    
+    List<Product> findAllByDistributionCenterAndActiveTrue(DistributionCenter distributionCenter);
+}
+public class ProductController {
+
+    @Autowired
+    private ProductRepository repository;
+
+    @GetMapping
+    public ResponseEntity getAllProducts(){
+        var allProducts = repository.findAllByActiveTrue();
+        return ResponseEntity.ok(allProducts);
+    }
+
+    @GetMapping("/distribution-center/{distributionCenter}")
+    public ResponseEntity getProductsByDistributionCenter(@PathVariable DistributionCenter distributionCenter){
+        List<Product> products = repository.findAllByDistributionCenterAndActiveTrue(distributionCenter);
+        return ResponseEntity.ok(products);
+    }
+
+    @GetMapping("/distribution-center/count")
+    public ResponseEntity getCountByDistributionCenter(){
+        Map<DistributionCenter, Long> summary = new HashMap<>();
+        for (DistributionCenter center : DistributionCenter.values()) {
+            long count = repository.findAllByDistributionCenterAndActiveTrue(center).size();
+            summary.put(center, count);
+        }
+        return ResponseEntity.ok(summary);
+    }
+
+    @PostMapping
+    public ResponseEntity registerProduct(@RequestBody @Valid RequestProduct data){
+        Product newProduct = new Product(data);
+        repository.save(newProduct);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping
+    @Transactional
+    public ResponseEntity updateProduct(@RequestBody @Valid RequestProduct data){
+        Optional<Product> optionalProduct = repository.findById(data.id());
+        if (optionalProduct.isPresent()) {
+            Product product = optionalProduct.get();
+            product.setName(data.name());
+            product.setPrice_in_cents(data.price_in_cents());
+            product.setCategory(data.category());
+            product.setDistributionCenter(data.distribution_center());
+            return ResponseEntity.ok(product);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity deleteProduct(@PathVariable String id){
+        Optional<Product> optionalProduct = repository.findById(id);
+        if (optionalProduct.isPresent()) {
+            Product product = optionalProduct.get();
+            product.setActive(false);
+            return ResponseEntity.noContent().build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
